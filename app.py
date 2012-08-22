@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # -*- coding: utf-8 -*-
  
 import sys
@@ -17,103 +18,96 @@ documentation: http://www.pyside.org/docs/pyside/PySide/QtGui/QTableView.html
 
 """
 
+from mongo import MongoAccess
+
 class MainWindow(QtGui.QWidget):
     #def __init__(self, rows):
     def __init__(self):
         super(MainWindow, self).__init__()
         self.table = QtGui.QTableWidget()
+        self.db_list=QtGui.QComboBox()
         self.table_list=QtGui.QListWidget()
 
-        #getting db data
-        self.connect_db()
-        self.set_db("truckroutes")
-        self.table_data=self.db.drivers
 
-        tbls=self.get_table_list()
-        self.set_table_list(tbls)
-
-        self.table_list.clicked.connect(self.item_clicked)
-
-        #FIXME: checking how many rows are returned
-        if self.table_data.find().count()==0:
-            #return
-            pass
-
-        headers=self.table_data.find()[0].keys()
-        self.set_headers(headers)
-
-        self.table.setRowCount(self.table_data.find().count())
-        for col_index,row in enumerate(self.table_data.find()):
-            #print col_index,row
-            for row_index, row_val in enumerate(row.values()):
-                self.add_table_cell(str(row_val), row_index,col_index)
+        self.db=MongoAccess()
 
 
-
-        self.setWindowTitle("MongoDb browser");
+        self.setWindowTitle("MongoDb browser")
+        self.resize(800, 600)
         vbox = QtGui.QHBoxLayout()
         self.setLayout(vbox)
 
-        mid_layout=QtGui.QHBoxLayout()
+        mid_layout=QtGui.QVBoxLayout()
+
+        mid_layout.addWidget(self.db_list)
         mid_layout.addWidget(self.table_list)
-        mid_layout.addWidget(self.table)
+        #mid_layout.addWidget(self.table)
         vbox.addLayout(mid_layout)
+        vbox.addWidget(self.table)
+
+        #setting up events
+        self.db_list.currentIndexChanged.connect(self.dbChanged)
+        self.table_list.currentRowChanged.connect(self.tableChanged)
+
+        #getting db data
+        self.getDbList()
 
 
-    def item_clicked(self, item):
-        print self.table_list.selectedItems()[0].text()
+    def connectDb(self,host,port):
+        self.db.connect(host,port)
+
+        #self.connection = pymongo.Connection('localhost', 27017)
 
 
-    def item_dblclicked(self, item):
-        print "itemDoubleClicked"
+    def getDbList(self):
+        db_list=self.db.getDbList()
+        if db_list is not None:
+            self.table_list.clear()
+            self.db_list.addItems(db_list)
 
-    def changeDb(self,db_name):
-        self.set_db(db_name)
-        #TODO: change all items in database
+
+    def dbChanged(self,combo_index):
+        self.table_list.clear()
+        #self.table_list.adjustSize()
+        self.table.clear()
+        self.populateTableList(self.db_list.currentText())
 
 
-    def get_all(self,table_name):
-        """  """
-        pass
+    def populateTableList(self,dbName):
+        self.table_list.clear()
+        tables=self.db.getTableList(dbName)
+        self.table_list.addItems(tables)
+        self.table_list.adjustSize()
 
-    def set_table_list(self, tables):
-        for table in tables:
-            table_item = QtGui.QListWidgetItem(table)
-            self.table_list.addItem(table_item)
 
-    def add_table_cell(self,item_text,row,col):
+
+    def tableChanged(self,table_index):
+        self.table.clear()
+        self.populateTableData(self.table_list.currentItem().text())
+
+
+    def populateTableData(self,table_name):
+        self.table.clear()
+        col_names=self.db.getTableColumns(table_name)
+        table_data=self.db.getAll(table_name)
+        self.setHeaders(col_names)
+        self.table.setRowCount(table_data.count())
+
+        for col_index,row in enumerate(table_data):
+            for key in row:
+                self.addCell(str(row[key]),col_names.index(key),col_index)
+
+
+    def addCell(self,item_text,row,col):
         table_item = QtGui.QTableWidgetItem(item_text)
         self.table.setItem(col,row, table_item)
 
 
-
-    def set_headers(self,headers):
-        #self.table.setHorizontalHeaderLabels(("First Name", "Last Name", "Address"))
+    def setHeaders(self,headers):
         self.table.setColumnCount(len(headers))
         self.table.setHorizontalHeaderLabels(tuple(headers))
 
 
-    def set_row_count(self,row_count=0):
-        self.table.setRowCount(row_count)
-
-
-
-
-    def connect_db(self):
-        self.connection = pymongo.Connection('localhost', 27017)
-        #self.db = connection['truckroutes']
-
-    def set_db(self,db_name):
-        self.db = self.connection[db_name]
-        return True
-
-
-    def get_table_list(self):
-        return self.db.collection_names()
-
-
-    def get_table_data(self, table_name):
-        pass
 
 
 if __name__ == "__main__":
